@@ -11,7 +11,7 @@ import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from data_proc import check_dirs_files
-import openai
+import llm_client
 import json
 from tqdm import tqdm
 import params
@@ -27,10 +27,7 @@ def construct_assistant_message(completion):
 def generate_answer(answer_context):
     while True:
         try:
-            completion = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-0613",  # 0301
-                messages=answer_context,
-                n=1)
+            completion = llm_client.create_chat_completion(answer_context)
             break
         except Exception as e:
             logging.warning(f"retrying due to an error: {e}")
@@ -91,7 +88,7 @@ def single_agent(args):
 
 def log_param(args):
     args_str = f'\n--------------- single agent parameters ---------------\n'
-    for k, v in args.__dict__.items():
+    for k, v in llm_client.safe_args(args).items():
         args_str += f'{k} = {v}\n'
     args_str += f'-------------------------------------------------------'
     logging.info(args_str)
@@ -106,8 +103,7 @@ if __name__ == "__main__":
     check_dirs_files(dirs=[args.dataset_dir, args.output_dir, ], files=[args.task_file, ])
 
     # 3. key and org
-    openai.api_key = args.openai_key
-    openai.organization = args.openai_organization
+    llm_client.configure(args)
 
     # 4. single_agent method
     single_agent(args)

@@ -37,6 +37,19 @@ EXAMPLE_NUM = {
 }
 
 
+def add_llm_args(args_parser):
+    args_parser.add_argument('--api_key', '--openai_key', dest='api_key', type=str,
+                             default=os.getenv('OPENAI_API_KEY', ''))
+    args_parser.add_argument('--base_url', type=str,
+                             default=os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1'))
+    args_parser.add_argument('--model', type=str,
+                             default=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo-0613'))
+    args_parser.add_argument('--enable_thinking', choices=['true', 'false'],
+                             default=os.getenv('OPENAI_ENABLE_THINKING'))
+    args_parser.add_argument('--openai_organization', type=str,
+                             default=os.getenv('OPENAI_ORGANIZATION', ''))
+
+
 def data_args():
     args_parser = argparse.ArgumentParser(description='process_data')
 
@@ -68,8 +81,7 @@ def single_agent_args():
                              choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
                                       'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
     args_parser.add_argument('--max_example_num', type=int, default=500) # AQuA: 254  AddSub: 395  Colored_Objects:250 Penguins: 146
-    args_parser.add_argument('--openai_key', type=str, default='')
-    args_parser.add_argument('--openai_organization', type=str, default='')
+    add_llm_args(args_parser)
 
     # agent
     args_parser.add_argument('--agent_num', type=int, default=3) # single agent answer question for 3 times
@@ -98,8 +110,7 @@ def self_correction():
                              choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
                                       'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
     args_parser.add_argument('--max_example_num', type=int, default=500) # AQuA: 254  AddSub: 395  Colored_Objects:250   Penguins 146
-    args_parser.add_argument('--openai_key', type=str, default='')
-    args_parser.add_argument('--openai_organization', type=str, default='')
+    add_llm_args(args_parser)
 
     # agent
     args_parser.add_argument('--agent_num', type=int, default=3) # single agent answer question for 3 times
@@ -128,8 +139,7 @@ def debate_args():
                              choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
                                       'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
     args_parser.add_argument('--max_example_num', type=int, default=500) # AQuA: 254  AddSub: 395  Colored_Objects:250
-    args_parser.add_argument('--openai_key', type=str, default='')
-    args_parser.add_argument('--openai_organization', type=str, default='')
+    add_llm_args(args_parser)
 
     # agent
     args_parser.add_argument('--agent_num', type=int, default=3)
@@ -159,8 +169,7 @@ def feedback_args():
                              choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
                                       'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
     args_parser.add_argument('--max_example_num', type=int, default=500) # AQuA: 254  AddSub: 395  Colored_Objects:250
-    args_parser.add_argument('--openai_key', type=str, default='')
-    args_parser.add_argument('--openai_organization', type=str, default='')
+    add_llm_args(args_parser)
 
     # agent
     args_parser.add_argument('--agent_num', type=int, default=3)
@@ -190,8 +199,7 @@ def peer_review_args():
                              choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
                                       'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
     args_parser.add_argument('--max_example_num', type=int, default=500) # AQuA: 254  AddSub: 395  Colored_Objects:250
-    args_parser.add_argument('--openai_key', type=str, default='')
-    args_parser.add_argument('--openai_organization', type=str, default='')
+    add_llm_args(args_parser)
 
     # agent
     args_parser.add_argument('--agent_num', type=int, default=3)

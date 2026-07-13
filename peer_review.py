@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 from data_proc import check_dirs_files
 import time
 import json
-import openai
+import llm_client
 from tqdm import tqdm
 import jsonlines
 import params
@@ -37,10 +37,7 @@ def construct_assistant_message(completion):
 def generate_answer(answer_context):
     while True:
         try:
-            completion = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-0613",  # 0301
-                messages=answer_context,
-                n=1)
+            completion = llm_client.create_chat_completion(answer_context)
             break
         except Exception as e:
             logging.warning(f"retrying due to an error: {e}")
@@ -148,7 +145,7 @@ def peer_review(args):
 
 def log_param(args):
     args_str = f'\n---------------- peer review parameters ----------------\n'
-    for k, v in args.__dict__.items():
+    for k, v in llm_client.safe_args(args).items():
         args_str += f'{k} = {v}\n'
     args_str += f'-------------------------------------------------------'
     logging.info(args_str)
@@ -163,8 +160,7 @@ if __name__ == "__main__":
     check_dirs_files(dirs=[args.dataset_dir, args.output_dir, ], files=[args.task_file, ])
 
     # 3. key and org
-    openai.api_key = args.openai_key
-    openai.organization = args.openai_organization
+    llm_client.configure(args)
 
     # 4. peer review method
     peer_review(args)
