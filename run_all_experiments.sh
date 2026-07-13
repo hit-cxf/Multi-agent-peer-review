@@ -16,12 +16,6 @@ export OPENAI_ENABLE_THINKING="${OPENAI_ENABLE_THINKING:-false}"
 command -v tmux >/dev/null 2>&1 || { echo "tmux is not installed" >&2; exit 1; }
 command -v conda >/dev/null 2>&1 || { echo "conda is not installed" >&2; exit 1; }
 
-# A long-lived tmux server may have been created before these variables existed.
-tmux set-environment -g OPENAI_API_KEY "${OPENAI_API_KEY}"
-tmux set-environment -g OPENAI_BASE_URL "${OPENAI_BASE_URL}"
-tmux set-environment -g OPENAI_MODEL "${OPENAI_MODEL}"
-tmux set-environment -g OPENAI_ENABLE_THINKING "${OPENAI_ENABLE_THINKING}"
-
 TASKS=(GSM8K SVAMP AQuA MultiArith AddSub SingleEq ARC-c StrategyQA Colored_Objects Penguins)
 SIZES=(500 500 254 500 395 500 500 500 250 146)
 METHODS=(single_agent self_correction debate feedback peer_review)
@@ -86,7 +80,12 @@ for i in "${!TASKS[@]}"; do
         command="cd '${PROJECT_DIR}' && conda run --no-capture-output -n '${CONDA_ENV}' python '${method}.py' --task '${task}' --max_example_num '${size}' --agent_num 3 --output_dir '${OUTPUT_DIR}' ${method_args} ${reload_arg} 2>&1 | tee -a '${log_file}'"
 
         if [[ "$j" -eq 0 ]]; then
-            tmux new-session -d -s "${session}" -n "${window}" "bash -lc \"${command}\""
+            tmux new-session -d -s "${session}" -n "${window}" \
+                -e "OPENAI_API_KEY=${OPENAI_API_KEY}" \
+                -e "OPENAI_BASE_URL=${OPENAI_BASE_URL}" \
+                -e "OPENAI_MODEL=${OPENAI_MODEL}" \
+                -e "OPENAI_ENABLE_THINKING=${OPENAI_ENABLE_THINKING}" \
+                "bash -lc \"${command}\""
         else
             tmux new-window -d -t "${session}:" -n "${window}" "bash -lc \"${command}\""
         fi
