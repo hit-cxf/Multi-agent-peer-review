@@ -2,6 +2,7 @@
 
 result_*/
 logs/
+eval_logs/
 
 .DS_Store
 

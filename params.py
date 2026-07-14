@@ -50,6 +50,11 @@ def add_llm_args(args_parser):
                              default=os.getenv('OPENAI_ORGANIZATION', ''))
 
 
+def result_time_flag():
+    """Use a shared batch suffix when launched by the experiment script."""
+    return os.getenv('MAPR_TIME_FLAG', datetime.now().strftime("%m%d"))
+
+
 def data_args():
     args_parser = argparse.ArgumentParser(description='process_data')
 
@@ -92,7 +97,7 @@ def single_agent_args():
     # parse
     args = args_parser.parse_args()
 
-    time = datetime.now().strftime("%m%d")
+    time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
     args.output_file = os.path.join(os.path.join(args.output_dir, args.task), f'{args.task}_single_agent_{args.max_example_num}_{time}.json')
 
@@ -121,7 +126,7 @@ def self_correction():
     # parse
     args = args_parser.parse_args()
 
-    time = datetime.now().strftime("%m%d")
+    time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
     args.output_file = os.path.join(os.path.join(args.output_dir, args.task), f'{args.task}_self_correction_{args.max_example_num}_{time}.json')
 
@@ -151,7 +156,7 @@ def debate_args():
     # parse
     args = args_parser.parse_args()
 
-    time = datetime.now().strftime("%m%d")
+    time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
     args.output_file = os.path.join(os.path.join(args.output_dir, args.task), f'{args.task}_debate_{args.max_example_num}_{time}.json')
 
@@ -181,7 +186,7 @@ def feedback_args():
     # parse
     args = args_parser.parse_args()
 
-    time = datetime.now().strftime("%m%d")
+    time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
     args.output_file = os.path.join(os.path.join(args.output_dir, args.task), f'{args.task}_feedback_{args.max_example_num}_{time}.json')
 
@@ -211,10 +216,34 @@ def peer_review_args():
     # parse
     args = args_parser.parse_args()
 
-    time = datetime.now().strftime("%m%d")
+    time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
     args.output_file = os.path.join(os.path.join(args.output_dir, args.task), f'{args.task}_peer_review_{args.max_example_num}_{time}.json')
 
+    return args
+
+
+def ablation_solution_args():
+    args_parser = argparse.ArgumentParser(description='peer_review_without_solution')
+
+    args_parser.add_argument('--dataset_dir', type=str, default='processed_data')
+    args_parser.add_argument('--output_dir', type=str, default='result')
+    args_parser.add_argument('--task', type=str, default='GSM8K',
+                             choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
+                                      'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
+    args_parser.add_argument('--max_example_num', type=int, default=500)
+    add_llm_args(args_parser)
+
+    args_parser.add_argument('--agent_num', type=int, default=3)
+    args_parser.add_argument('--rounds', type=int, default=3)
+    args_parser.add_argument('--reload_data', type=bool, default=False)
+
+    args = args_parser.parse_args()
+    time = result_time_flag()
+    args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task),
+                                  f'{args.task}_{args.max_example_num}.jsonl')
+    args.output_file = os.path.join(os.path.join(args.output_dir, args.task),
+                                    f'{args.task}_ablation_solution_{args.max_example_num}_{time}.json')
     return args
 
 
@@ -228,7 +257,8 @@ def eval_args():
                              choices=['GSM8K', 'SVAMP', 'AQuA', 'MultiArith', 'AddSub', 'SingleEq',
                                       'ARC-c', 'StrategyQA', 'Colored_Objects', 'Penguins'])
     args_parser.add_argument('--method', type=str, default='peer_review',
-                             choices=['single_agent', 'self_correction', 'majority', 'debate', 'feedback', 'peer_review'])
+                             choices=['single_agent', 'self_correction', 'majority', 'debate', 'feedback',
+                                      'peer_review', 'ablation_solution'])
     args_parser.add_argument('--time_flag', type=str, default='1113')
 
     # parse
