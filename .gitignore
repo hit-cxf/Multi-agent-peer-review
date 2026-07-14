@@ -1,5 +1,7 @@
 .env
+
 result_*/
+logs/
 
 .DS_Store
 
