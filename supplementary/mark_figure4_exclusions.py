@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Mark provider-rejected samples in Figure 4 result copies only."""
+
+import argparse
+import json
+import os
+import tempfile
+from pathlib import Path
+
+
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--result-root",
+        type=Path,
+        default=PROJECT_DIR / "result_agent_num_review_rounds",
+    )
+    parser.add_argument("--task", default="StrategyQA")
+    parser.add_argument("--index", type=int, default=385, help="1-based dataset index")
+    parser.add_argument("--reason", default="DashScope data_inspection_failed")
+    return parser.parse_args()
+
+
+def atomic_write(path, data):
+    descriptor, temporary_name = tempfile.mkstemp(prefix=path.name, suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False)
+        os.replace(temporary_name, path)
+    except Exception:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
+def main():
+    args = parse_args()
+    if args.index < 1:
+        raise ValueError("--index must be positive")
+
+    paths = sorted(args.result_root.glob(f"agent_num_*_review_rounds_*/{args.task}/*.json"))
+    if not paths:
+        raise FileNotFoundError(f"No {args.task} result files found under {args.result_root}")
+
+    changed = 0
+    for path in paths:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if len(data) < args.index:
+            print(f"SKIP incomplete ({len(data)} rows): {path}")
+            continue
+        original = data[args.index - 1]
+        data[args.index - 1] = {
+            "question": original["question"],
+            "answer": original["answer"],
+            "agent_contexts": [],
+            "excluded": True,
+            "exclusion_reason": args.reason,
+            "dataset_index": args.index,
+        }
+        atomic_write(path, data)
+        changed += 1
+        print(f"MARKED: {path}")
+    print(f"Marked {changed} supplementary result file(s); main-table results were not scanned.")
+
+
+if __name__ == "__main__":
+    main()

@@ -7,7 +7,7 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/result_agent_num_review_rounds}"
 LOG_ROOT="${LOG_ROOT:-${PROJECT_DIR}/logs/figure4_agent_num_review_rounds}"
 SESSION_PREFIX="${SESSION_PREFIX:-MAPR_F4}"
 TIME_FLAG="${TIME_FLAG:-$(date +%m%d)}"
-RELOAD_DATA="${RELOAD_DATA:-false}"
+RELOAD_DATA="${RELOAD_DATA:-true}"
 
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
 export OPENAI_MODEL="${OPENAI_MODEL:-qwen3-8b}"
@@ -51,6 +51,7 @@ for config in "${CONFIGS[@]}"; do
         log_dir="${LOG_ROOT}/${config_name}/${task}"
         log_file="${log_dir}/peer_review.log"
         reload_arg=""
+        exclude_arg=""
 
         mkdir -p "${output_dir}" "${log_dir}"
         if [[ -e "${output_file}" ]]; then
@@ -62,7 +63,13 @@ for config in "${CONFIGS[@]}"; do
             fi
         fi
 
-        command="cd '${PROJECT_DIR}' && conda run --no-capture-output -n '${CONDA_ENV}' python supplementary/peer_review_cycles.py --task '${task}' --max_example_num '${size}' --agent_num '${agent_num}' --review_rounds '${review_rounds}' --output_file '${output_file}' ${reload_arg} 2>&1 | tee -a '${log_file}'"
+        # DashScope rejects StrategyQA sample 385 during input inspection.
+        # Exclude it consistently in Figure 4 only; main-table data is untouched.
+        if [[ "${task}" == "StrategyQA" ]]; then
+            exclude_arg="--exclude_indices 385"
+        fi
+
+        command="cd '${PROJECT_DIR}' && conda run --no-capture-output -n '${CONDA_ENV}' python supplementary/peer_review_cycles.py --task '${task}' --max_example_num '${size}' --agent_num '${agent_num}' --review_rounds '${review_rounds}' --output_file '${output_file}' ${exclude_arg} ${reload_arg} 2>&1 | tee -a '${log_file}'"
 
         if [[ "${index}" -eq 0 ]]; then
             tmux new-session -d -s "${session}" -n "${task}" \
