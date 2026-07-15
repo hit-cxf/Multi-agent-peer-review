@@ -11,7 +11,7 @@ RELOAD_DATA="${RELOAD_DATA:-true}"
 
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
 export OPENAI_MODEL="${OPENAI_MODEL:-qwen3-8b}"
-export OPENAI_ENABLE_THINKING="${OPENAI_ENABLE_THINKING:-true}"
+export OPENAI_ENABLE_THINKING="${OPENAI_ENABLE_THINKING:-false}"
 
 TASKS=(GSM8K AQuA StrategyQA)
 CONFIGS=("2 1" "4 1" "5 1" "3 2" "3 3" "3 4")
