@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import time
+import urllib.error
 from pathlib import Path
 
 from tqdm import tqdm
@@ -35,6 +36,11 @@ def parse_args():
     parser.add_argument("--max_example_num", type=int, required=True)
     parser.add_argument("--agent_num", type=int, required=True)
     parser.add_argument("--review_rounds", type=int, required=True)
+    parser.add_argument(
+        "--exclude_indices",
+        default="",
+        help="Comma-separated 1-based dataset indices excluded only from this supplementary run.",
+    )
     parser.add_argument("--reload_data", action="store_true")
     parser.add_argument("--api_key", default=os.getenv("OPENAI_API_KEY", ""))
     parser.add_argument(
@@ -50,6 +56,14 @@ def parse_args():
         parser.error("--agent_num must be at least 2")
     if args.review_rounds < 1:
         parser.error("--review_rounds must be at least 1")
+    try:
+        args.exclude_indices = {
+            int(value.strip()) for value in args.exclude_indices.split(",") if value.strip()
+        }
+    except ValueError:
+        parser.error("--exclude_indices must be comma-separated positive integers")
+    if any(index < 1 for index in args.exclude_indices):
+        parser.error("--exclude_indices values must be positive 1-based indices")
     args.task_file = str(
         Path(args.dataset_dir) / args.task / f"{args.task}_{args.max_example_num}.jsonl"
     )
@@ -64,6 +78,24 @@ def generate_answer(context):
     while True:
         try:
             return llm_client.create_chat_completion(context)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            context_chars = sum(len(message.get("content", "")) for message in context)
+            logging.error(
+                "[MAPR-HTTP] status=%s messages=%d context_chars=%d response=%s",
+                exc.code,
+                len(context),
+                context_chars,
+                body,
+            )
+            # 429 is transient. Other 4xx responses describe a request that
+            # will not change, so retrying it forever only stalls the dataset.
+            if exc.code != 429 and 400 <= exc.code < 500:
+                raise RuntimeError(
+                    f"non-retryable HTTP {exc.code}; inspect the [MAPR-HTTP] log entry"
+                ) from exc
+            logging.warning("retrying after HTTP %s", exc.code)
+            time.sleep(20)
         except Exception as exc:
             logging.warning("retrying due to an error: %s", exc)
             time.sleep(20)
@@ -153,6 +185,26 @@ def run_peer_review(args):
 
     for index, data in enumerate(tqdm(read_jsonl(args.task_file))):
         if args.reload_data and index < generated_len:
+            continue
+
+        dataset_index = index + 1
+        if dataset_index in args.exclude_indices:
+            generated.append(
+                {
+                    "question": data["question"],
+                    "answer": data["answer"],
+                    "agent_contexts": [],
+                    "excluded": True,
+                    "exclusion_reason": "DashScope data_inspection_failed",
+                    "dataset_index": dataset_index,
+                }
+            )
+            output_file.write_text(json.dumps(generated, ensure_ascii=False), encoding="utf-8")
+            logging.warning(
+                "excluded supplementary sample %d for task %s: DashScope data_inspection_failed",
+                dataset_index,
+                args.task,
+            )
             continue
 
         question = data["question"]
