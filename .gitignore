@@ -3,6 +3,7 @@
 result_*/
 logs/
 eval_logs/
+tmp*/
 
 .DS_Store
 
