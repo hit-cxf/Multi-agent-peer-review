@@ -24,7 +24,7 @@ tasks_csv=""
 methods_csv=""
 
 usage() {
-    echo "Usage: $0 [--tasks TASK1,TASK2] [--methods METHOD1,METHOD2] [--time-flag MMDD]"
+    echo "Usage: $0 [--tasks TASK1,TASK2] [--methods METHOD1,METHOD2] [--time-flag MMDD] [--reload-data]"
     echo "Tasks: ${ALL_TASKS[*]}"
     echo "Methods: ${ALL_METHODS[*]}"
 }
@@ -65,6 +65,10 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 ]] || { echo "--time-flag requires a four-digit value such as 0713" >&2; exit 2; }
             TIME_FLAG="$2"
             shift 2
+            ;;
+        --reload-data)
+            RELOAD_DATA="true"
+            shift
             ;;
         -h|--help)
             usage
