@@ -1,0 +1,13 @@
+# Runtime dependencies for Python 3.9.
+# This list is maintained manually from imports used by the project.
+
+# Experiment execution and evaluation
+jsonlines==4.0.0
+numpy==2.0.2
+tqdm==4.64.0
+
+# Excel report export
+openpyxl==3.1.5
+
+# Paper figures and visualizations
+matplotlib==3.9.4
