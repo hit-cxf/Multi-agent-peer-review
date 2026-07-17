@@ -20,6 +20,7 @@ if str(PROJECT_DIR) not in sys.path:
 
 from eval import compute_accuracy, parse_pred_answer
 from params import EXAMPLE_NUM
+from style import ANSWER_TRANSITION_COLORS, COLORS
 
 
 METHODS = [
@@ -34,12 +35,6 @@ CATEGORIES = [
     "Incorrect → Correct",
     "Incorrect → Incorrect",
 ]
-COLORS = {
-    "No Change": "#CBD5E1",
-    "Correct → Incorrect": "#D95F59",
-    "Incorrect → Correct": "#2A9D6F",
-    "Incorrect → Incorrect": "#E9A23B",
-}
 
 
 def parse_args():
@@ -108,7 +103,7 @@ def plot(rows, output, task):
     left = np.zeros(len(rows))
     for category in CATEGORIES:
         values = np.array([counts[category] / sum(counts.values()) * 100 for _, _, counts in rows])
-        ax_all.barh(y, values, left=left, color=COLORS[category], height=0.55, label=category)
+        ax_all.barh(y, values, left=left, color=ANSWER_TRANSITION_COLORS[category], height=0.55, label=category)
         for row_index, value in enumerate(values):
             # Small transition segments are expanded and labelled precisely in
             # the right panel; labelling them here would create collisions.
@@ -124,7 +119,7 @@ def plot(rows, output, task):
             changed = sum(counts[item] for item in changed_categories)
             values.append(counts[category] / changed * 100 if changed else 0)
         values = np.array(values)
-        ax_changed.barh(y, values, left=left, color=COLORS[category], height=0.55)
+        ax_changed.barh(y, values, left=left, color=ANSWER_TRANSITION_COLORS[category], height=0.55)
         for row_index, value in enumerate(values):
             if value >= 5:
                 ax_changed.text(left[row_index] + value / 2, row_index, f"{value:.1f}", ha="center", va="center", fontsize=9)
@@ -134,7 +129,7 @@ def plot(rows, output, task):
         ax.set_xlim(0, 100)
         ax.set_xticks(np.arange(0, 101, 20))
         ax.set_xlabel("Share of answers (%)")
-        ax.grid(axis="x", color="#E2E8F0", linewidth=0.7)
+        ax.grid(axis="x", color=COLORS["structure"], linewidth=0.7)
         ax.set_axisbelow(True)
         ax.spines[["top", "right", "left"]].set_visible(False)
         ax.tick_params(axis="y", length=0)
@@ -144,7 +139,7 @@ def plot(rows, output, task):
     ax_changed.set_yticks(y, [""] * len(labels))
     changed_totals = [sum(c[item] for item in changed_categories) for _, _, c in rows]
     for index, changed in enumerate(changed_totals):
-        ax_changed.text(101.5, index, f"n={changed}", va="center", fontsize=9, color="#475569", clip_on=False)
+        ax_changed.text(101.5, index, f"n={changed}", va="center", fontsize=9, color=COLORS["secondary_text"], clip_on=False)
 
     handles, legend_labels = ax_all.get_legend_handles_labels()
     fig.legend(handles, legend_labels, loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.04))
