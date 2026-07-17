@@ -321,6 +321,33 @@ def write_metrics(datasets, output_path):
             writer.writerow({field: dataset[field] for field in fields})
 
 
+def print_plot_data(datasets):
+    print("\n[PLOT DATA] Confidence summary")
+    print(
+        "task\tn\tfeedback_accuracy_pct\tmean_confidence_pct\t"
+        "calibration_gap_pct\tauroc\tece"
+    )
+    for dataset in datasets:
+        print(
+            f"{dataset['task']}\t{dataset['n']}\t{dataset['accuracy'] * 100:.4f}\t"
+            f"{dataset['mean_confidence'] * 100:.4f}\t"
+            f"{dataset['calibration_gap'] * 100:.4f}\t"
+            f"{dataset['auroc']:.6f}\t{dataset['ece']:.6f}"
+        )
+
+    print("\n[PLOT DATA] Confidence distribution and reliability")
+    print("task\tconfidence\tcount\tshare_pct\tbin_accuracy_pct")
+    for dataset in datasets:
+        for index, count in enumerate(dataset["counts"]):
+            confidence = index + 1
+            bin_accuracy = dataset["bin_accuracy"][index]
+            accuracy_text = "NA" if np.isnan(bin_accuracy) else f"{bin_accuracy * 100:.4f}"
+            print(
+                f"{dataset['task']}\t{confidence}\t{int(count)}\t"
+                f"{dataset['shares'][index]:.4f}\t{accuracy_text}"
+            )
+
+
 def main():
     args = parse_args()
     datasets = load_metrics(args.result_dir, args.time_flag, args.sample_size)
@@ -329,14 +356,18 @@ def main():
     gap_path = args.output_dir / f"figure5_accuracy_confidence_gap_{args.time_flag}.png"
     reliability_path = args.output_dir / f"figure5_reliability_{args.time_flag}.png"
     metrics_path = args.result_dir / f"figure5_metrics_{args.time_flag}.csv"
+    print_plot_data(datasets)
     plot_distribution(datasets, distribution_path)
     plot_accuracy_confidence_gap(datasets, gap_path)
     plot_reliability(datasets, reliability_path)
     write_metrics(datasets, metrics_path)
-    print(distribution_path)
-    print(gap_path)
-    print(reliability_path)
-    print(metrics_path)
+    print(f"\n[OUTPUT] {distribution_path}")
+    print(f"[OUTPUT] {distribution_path.with_suffix('.pdf')}")
+    print(f"[OUTPUT] {gap_path}")
+    print(f"[OUTPUT] {gap_path.with_suffix('.pdf')}")
+    print(f"[OUTPUT] {reliability_path}")
+    print(f"[OUTPUT] {reliability_path.with_suffix('.pdf')}")
+    print(f"[OUTPUT] {metrics_path}")
 
 
 if __name__ == "__main__":

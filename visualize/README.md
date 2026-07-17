@@ -3,6 +3,11 @@
 All scripts that turn experiment results into figures belong in this directory.
 By default, generated figures must be written to `../pics/`.
 
+Every plotting script must print the complete aggregated data used by the
+figure while drawing. Use a stable tab-separated table with explicit units,
+sample counts, exclusions, and source files where applicable, followed by the
+generated output paths.
+
 ## Shared color semantics
 
 All figures must import colors from `style.py`. Semantic mappings remain stable:

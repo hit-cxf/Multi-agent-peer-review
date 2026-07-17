@@ -150,6 +150,27 @@ def plot(rows, output, task):
     plt.close(fig)
 
 
+def print_plot_data(rows, task):
+    print(f"\n[PLOT DATA] Answer transitions: task={task}")
+    print(
+        "method\ttotal\tcategory\tcount\tshare_all_pct\tshare_changed_pct"
+    )
+    changed_categories = CATEGORIES[1:]
+    for _, label, counts in rows:
+        total = sum(counts.values())
+        changed = sum(counts[category] for category in changed_categories)
+        for category in CATEGORIES:
+            count = counts[category]
+            share_all = count / total * 100 if total else 0
+            share_changed = (
+                count / changed * 100 if changed and category in changed_categories else 0
+            )
+            print(
+                f"{label}\t{total}\t{category}\t{count}\t"
+                f"{share_all:.4f}\t{share_changed:.4f}"
+            )
+
+
 def main():
     args = parse_args()
     output = args.output or PROJECT_DIR / "pics" / f"answer_transitions_{args.task}_{args.time_flag}.png"
@@ -159,8 +180,10 @@ def main():
         if not path.exists():
             raise FileNotFoundError(path)
         rows.append((method, label, transition_counts(path, args.task)))
+    print_plot_data(rows, args.task)
     plot(rows, output, args.task)
-    print(output)
+    print(f"\n[OUTPUT] {output}")
+    print(f"[OUTPUT] {output.with_suffix('.pdf')}")
 
 
 if __name__ == "__main__":
