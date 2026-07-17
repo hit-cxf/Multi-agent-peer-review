@@ -9,6 +9,7 @@
 import argparse
 import os
 from datetime import datetime
+import sample_filter
 
 TASK_FILE = {
     'GSM8K': 'GSM8K.jsonl',         # 1319      https://github.com/openai/grade-school-math/blob/master/grade_school_math/data/test.jsonl
@@ -48,6 +49,7 @@ def add_llm_args(args_parser):
                              default=os.getenv('OPENAI_ENABLE_THINKING'))
     args_parser.add_argument('--openai_organization', type=str,
                              default=os.getenv('OPENAI_ORGANIZATION', ''))
+    sample_filter.add_sample_filter_args(args_parser)
 
 
 def result_time_flag():
@@ -96,6 +98,7 @@ def single_agent_args():
 
     # parse
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
 
     time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
@@ -125,6 +128,7 @@ def self_correction():
 
     # parse
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
 
     time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
@@ -155,6 +159,7 @@ def debate_args():
 
     # parse
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
 
     time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
@@ -185,6 +190,7 @@ def feedback_args():
 
     # parse
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
 
     time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
@@ -215,6 +221,7 @@ def peer_review_args():
 
     # parse
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
 
     time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task), f'{args.task}_{args.max_example_num}.jsonl')
@@ -239,6 +246,7 @@ def ablation_solution_args():
     args_parser.add_argument('--reload_data', type=bool, default=False)
 
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
     time = result_time_flag()
     args.task_file = os.path.join(os.path.join(args.dataset_dir, args.task),
                                   f'{args.task}_{args.max_example_num}.jsonl')

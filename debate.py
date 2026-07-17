@@ -12,6 +12,7 @@ import llm_client
 import json
 from tqdm import tqdm
 import params
+import sample_filter
 
 
 
@@ -77,6 +78,11 @@ def debate(args):
     for i, data in enumerate(tqdm(all_datas)):
 
         if args.reload_data and i < generated_len:
+            continue
+
+        if sample_filter.append_excluded_record_if_needed(
+                generated_description, data, args.task, i, args.output_file,
+                args.sample_exclusions):
             continue
 
         question = data['question']

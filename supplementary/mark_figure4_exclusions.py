@@ -5,10 +5,15 @@ import argparse
 import json
 import os
 import tempfile
+import sys
 from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+import sample_filter  # noqa: E402
 
 
 def parse_args():
@@ -51,14 +56,10 @@ def main():
             print(f"SKIP incomplete ({len(data)} rows): {path}")
             continue
         original = data[args.index - 1]
-        data[args.index - 1] = {
-            "question": original["question"],
-            "answer": original["answer"],
-            "agent_contexts": [],
-            "excluded": True,
-            "exclusion_reason": args.reason,
-            "dataset_index": args.index,
-        }
+        data[args.index - 1] = sample_filter.excluded_record(
+            original, args.task, args.index
+        )
+        data[args.index - 1]["exclusion_reason"] = args.reason
         atomic_write(path, data)
         changed += 1
         print(f"MARKED: {path}")

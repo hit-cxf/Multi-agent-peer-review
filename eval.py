@@ -18,6 +18,7 @@ import re
 from tqdm import tqdm
 
 from params import eval_args
+import sample_filter
 
 
 def read_json(input_path):
@@ -191,6 +192,9 @@ def evaluate_multi_agent(args):
 
     input_data = read_json(args.eval_file)
     assert len(input_data) == args.example_num
+    input_data, excluded_data = sample_filter.filter_evaluation_rows(input_data)
+    effective_num = len(input_data)
+    logging.info('evaluation samples: %d; excluded: %d', effective_num, len(excluded_data))
 
     accuracies = []
     index = 0
@@ -211,13 +215,18 @@ def evaluate_multi_agent(args):
         else:
             accuracies.append(0.0)
 
-        if index % 100 == 0 or index == args.example_num:
+        if index % 100 == 0 or index == effective_num:
             print(f"{index} accuracy: {np.mean(accuracies) * 100:.4f} %, SEM: {np.std(accuracies) / (len(accuracies) ** 0.5) * 100:.4f} %")
 
 
 def evaluate_single_agent(args):
     input_data = read_json(args.eval_file)
     assert len(input_data) == args.example_num
+    input_data, excluded_data = sample_filter.filter_evaluation_rows(input_data)
+    effective_num = len(input_data)
+    logging.info('evaluation samples: %d; excluded: %d', effective_num, len(excluded_data))
+    if not input_data:
+        raise ValueError('no evaluable samples remain after filtering')
 
     gt_lst, pred_solutions_lst = [], []
     for tmp_data in tqdm(input_data):
@@ -245,7 +254,7 @@ def evaluate_single_agent(args):
             else:
                 accuracies.append(0.0)
 
-            if index % 100 == 0 or index == args.example_num:
+            if index % 100 == 0 or index == effective_num:
                 acc, sem = np.mean(accuracies) * 100, np.std(accuracies) / (len(accuracies) ** 0.5) * 100
                 print(f"{index} accuracy: {acc:.4f} %, SEM: {sem:.4f} %")
                 multi_agent_result[agent_num][index] = (acc, sem)

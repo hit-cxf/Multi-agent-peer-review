@@ -19,6 +19,7 @@ if str(PROJECT_DIR) not in sys.path:
 
 from data_proc import check_dirs_files  # noqa: E402
 import llm_client  # noqa: E402
+import sample_filter  # noqa: E402
 from params import TASK_FILE  # noqa: E402
 
 
@@ -36,11 +37,7 @@ def parse_args():
     parser.add_argument("--max_example_num", type=int, required=True)
     parser.add_argument("--agent_num", type=int, required=True)
     parser.add_argument("--review_rounds", type=int, required=True)
-    parser.add_argument(
-        "--exclude_indices",
-        default="",
-        help="Comma-separated 1-based dataset indices excluded only from this supplementary run.",
-    )
+    sample_filter.add_sample_filter_args(parser)
     parser.add_argument("--reload_data", action="store_true")
     parser.add_argument("--api_key", default=os.getenv("OPENAI_API_KEY", ""))
     parser.add_argument(
@@ -56,14 +53,7 @@ def parse_args():
         parser.error("--agent_num must be at least 2")
     if args.review_rounds < 1:
         parser.error("--review_rounds must be at least 1")
-    try:
-        args.exclude_indices = {
-            int(value.strip()) for value in args.exclude_indices.split(",") if value.strip()
-        }
-    except ValueError:
-        parser.error("--exclude_indices must be comma-separated positive integers")
-    if any(index < 1 for index in args.exclude_indices):
-        parser.error("--exclude_indices values must be positive 1-based indices")
+    args = sample_filter.finalize_sample_filter_args(args, TASKS)
     args.task_file = str(
         Path(args.dataset_dir) / args.task / f"{args.task}_{args.max_example_num}.jsonl"
     )
@@ -187,24 +177,14 @@ def run_peer_review(args):
         if args.reload_data and index < generated_len:
             continue
 
-        dataset_index = index + 1
-        if dataset_index in args.exclude_indices:
-            generated.append(
-                {
-                    "question": data["question"],
-                    "answer": data["answer"],
-                    "agent_contexts": [],
-                    "excluded": True,
-                    "exclusion_reason": "DashScope data_inspection_failed",
-                    "dataset_index": dataset_index,
-                }
-            )
-            output_file.write_text(json.dumps(generated, ensure_ascii=False), encoding="utf-8")
-            logging.warning(
-                "excluded supplementary sample %d for task %s: DashScope data_inspection_failed",
-                dataset_index,
-                args.task,
-            )
+        if sample_filter.append_excluded_record_if_needed(
+            generated,
+            data,
+            args.task,
+            index,
+            output_file,
+            args.sample_exclusions,
+        ):
             continue
 
         question = data["question"]

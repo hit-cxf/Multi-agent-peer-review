@@ -15,6 +15,8 @@ from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+import sample_filter
+
 
 PROJECT_DIR = Path(__file__).resolve().parent
 TASK_SIZES = {
@@ -103,7 +105,9 @@ def expected_file(result_dir, task, method, time_flag):
 def validate_inputs(result_dir, time_flag):
     errors = []
     checked = set()
+    task_exclusions = {}
     for task, expected_size in TASK_SIZES.items():
+        exclusion_sets = []
         for method, _ in METHODS:
             path = expected_file(result_dir, task, method, time_flag)
             if path in checked:
@@ -114,7 +118,8 @@ def validate_inputs(result_dir, time_flag):
                 continue
             try:
                 with path.open(encoding="utf-8") as handle:
-                    actual_size = len(json.load(handle))
+                    rows = json.load(handle)
+                actual_size = len(rows)
             except Exception as exc:
                 errors.append(f"Unreadable JSON: {path}: {exc}")
                 continue
@@ -122,8 +127,23 @@ def validate_inputs(result_dir, time_flag):
                 errors.append(
                     f"Incomplete: {path} has {actual_size}, expected {expected_size}"
                 )
+            exclusions = {
+                (dataset or task, index)
+                for dataset, index in sample_filter.excluded_keys(rows)
+            }
+            exclusion_sets.append((path, exclusions))
+        if exclusion_sets:
+            expected_exclusions = exclusion_sets[0][1]
+            for path, exclusions in exclusion_sets[1:]:
+                if exclusions != expected_exclusions:
+                    errors.append(
+                        f"Inconsistent exclusions for {task}: {path} has "
+                        f"{sorted(exclusions)}, expected {sorted(expected_exclusions)}"
+                    )
+            task_exclusions[task] = expected_exclusions
     if errors:
         raise RuntimeError("Input validation failed:\n" + "\n".join(errors))
+    return task_exclusions
 
 
 def parse_agent_metrics(output, sample_size):
@@ -149,7 +169,7 @@ def parse_agent_metrics(output, sample_size):
     return details
 
 
-def run_evaluations(result_dir, time_flag, log_dir):
+def run_evaluations(result_dir, time_flag, log_dir, task_exclusions):
     log_dir.mkdir(parents=True, exist_ok=True)
     results = []
     agent_results = []
@@ -157,6 +177,7 @@ def run_evaluations(result_dir, time_flag, log_dir):
     current = 0
 
     for task, sample_size in TASK_SIZES.items():
+        effective_size = sample_size - len(task_exclusions.get(task, set()))
         for method, label in METHODS:
             current += 1
             print(f"[{current:02d}/{total}] {task} / {method}")
@@ -192,7 +213,7 @@ def run_evaluations(result_dir, time_flag, log_dir):
                     f"Could not parse metrics for {task}/{method}; see {log_path}"
                 )
             count, accuracy, sem = metrics[-1]
-            if int(count) != sample_size:
+            if int(count) != effective_size:
                 raise RuntimeError(
                     f"Unexpected final sample count for {task}/{method}: {count}"
                 )
@@ -203,7 +224,7 @@ def run_evaluations(result_dir, time_flag, log_dir):
                     "task": task,
                     "method": method,
                     "label": label,
-                    "sample_size": sample_size,
+                    "sample_size": effective_size,
                     "accuracy": float(accuracy) / 100,
                     "sem": float(sem) / 100,
                     "source_file": str(source_file),
@@ -213,13 +234,13 @@ def run_evaluations(result_dir, time_flag, log_dir):
             )
 
             if method in {"single_agent", "self_correction"}:
-                for detail in parse_agent_metrics(completed.stdout, sample_size):
+                for detail in parse_agent_metrics(completed.stdout, effective_size):
                     agent_results.append(
                         {
                             "task": task,
                             "method": method,
                             "label": label,
-                            "sample_size": sample_size,
+                            "sample_size": effective_size,
                             **detail,
                         }
                     )
@@ -416,8 +437,10 @@ def main():
         args.log_dir.resolve() if args.log_dir else result_dir / "eval_logs" / time_flag
     )
 
-    validate_inputs(result_dir, time_flag)
-    results, agent_results = run_evaluations(result_dir, time_flag, log_dir)
+    task_exclusions = validate_inputs(result_dir, time_flag)
+    results, agent_results = run_evaluations(
+        result_dir, time_flag, log_dir, task_exclusions
+    )
     build_workbook(results, agent_results, result_dir, time_flag, output_path)
     verify_workbook(output_path, len(results))
     print(f"Excel report: {output_path}")

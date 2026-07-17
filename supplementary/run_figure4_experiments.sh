@@ -66,7 +66,7 @@ for config in "${CONFIGS[@]}"; do
         # DashScope rejects StrategyQA sample 385 during input inspection.
         # Exclude it consistently in Figure 4 only; main-table data is untouched.
         if [[ "${task}" == "StrategyQA" ]]; then
-            exclude_arg="--exclude_indices 385"
+            exclude_arg="--exclude-sample StrategyQA:385"
         fi
 
         command="cd '${PROJECT_DIR}' && conda run --no-capture-output -n '${CONDA_ENV}' python supplementary/peer_review_cycles.py --task '${task}' --max_example_num '${size}' --agent_num '${agent_num}' --review_rounds '${review_rounds}' --output_file '${output_file}' ${exclude_arg} ${reload_arg} 2>&1 | tee -a '${log_file}'"

@@ -158,7 +158,11 @@ for i in "${!TASKS[@]}"; do
             method_args="--rounds 3"
         fi
 
-        command="cd '${PROJECT_DIR}' && conda run --no-capture-output -n '${CONDA_ENV}' python '${method}.py' --task '${task}' --max_example_num '${size}' --agent_num 3 --output_dir '${OUTPUT_DIR}' ${method_args} ${reload_arg} 2>&1 | tee -a '${log_file}'"
+        exclude_arg=""
+        if [[ "${task}" == "StrategyQA" ]]; then
+            exclude_arg="--exclude-sample StrategyQA:385"
+        fi
+        command="cd '${PROJECT_DIR}' && conda run --no-capture-output -n '${CONDA_ENV}' python '${method}.py' --task '${task}' --max_example_num '${size}' --agent_num 3 --output_dir '${OUTPUT_DIR}' ${method_args} ${exclude_arg} ${reload_arg} 2>&1 | tee -a '${log_file}'"
 
         if [[ "$j" -eq 0 ]]; then
             tmux new-session -d -s "${session}" -n "${window}" \
