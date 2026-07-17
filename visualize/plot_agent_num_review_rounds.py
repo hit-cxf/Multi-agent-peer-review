@@ -177,29 +177,29 @@ def draw_curve(values, varying, output, y_limits, show_value_labels):
 
 def print_plot_data(values, files):
     print("\n[PLOT DATA] Agent-number curve (review_rounds=1)")
-    print("task\tagent_num\treview_rounds\taccuracy_pct\tn\texcluded\tfile")
+    print("task\tagent_num\treview_rounds\taccuracy_pct\tn\texcluded")
     for task in TASKS:
         for agent_num in (2, 3, 4, 5):
             key = (agent_num, 1, task)
             if key not in values:
                 continue
-            path, valid_count, excluded_count = files[key]
+            _, valid_count, excluded_count = files[key]
             print(
                 f"{task}\t{agent_num}\t1\t{values[key]:.4f}\t{valid_count}\t"
-                f"{excluded_count}\t{path}"
+                f"{excluded_count}"
             )
 
     print("\n[PLOT DATA] Review-round curve (agent_num=3)")
-    print("task\tagent_num\treview_rounds\taccuracy_pct\tn\texcluded\tfile")
+    print("task\tagent_num\treview_rounds\taccuracy_pct\tn\texcluded")
     for task in TASKS:
         for review_rounds in (1, 2, 3, 4):
             key = (3, review_rounds, task)
             if key not in values:
                 continue
-            path, valid_count, excluded_count = files[key]
+            _, valid_count, excluded_count = files[key]
             print(
                 f"{task}\t3\t{review_rounds}\t{values[key]:.4f}\t{valid_count}\t"
-                f"{excluded_count}\t{path}"
+                f"{excluded_count}"
             )
 
 
