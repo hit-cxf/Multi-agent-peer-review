@@ -13,6 +13,7 @@ TASKS = ("GSM8K", "StrategyQA")
 DISPLAY_BINS = ("50", "60", "70", "80", "90", "100")
 CORRECT_COLOR = "#4C92C3"
 WRONG_COLOR = "#E15759"
+RELIABILITY_BAR_WIDTH = 0.05
 
 
 def parse_args():
@@ -145,7 +146,12 @@ def plot_dataset(dataset, output_dir, time_flag):
     plt.close(distribution_figure)
 
     reliability_figure, reliability_axis = plt.subplots(figsize=(5.0, 4.2))
-    confidence_positions = np.arange(5, 11) / 10
+    # Treat each verbalized confidence as the right edge of an equal-width bin.
+    # This keeps the 100% bar fully inside the [0, 1] axes instead of clipping
+    # half of a bar centered at x=1.0.
+    confidence_positions = (
+        np.arange(5, 11) / 10 - RELIABILITY_BAR_WIDTH / 2
+    )
     mask = ~np.isnan(dataset["bin_accuracy"])
     reliability_axis.plot(
         [0, 1],
@@ -158,7 +164,7 @@ def plot_dataset(dataset, output_dir, time_flag):
     reliability_axis.bar(
         confidence_positions[mask],
         dataset["bin_accuracy"][mask],
-        width=0.052,
+        width=RELIABILITY_BAR_WIDTH,
         color=CORRECT_COLOR,
         edgecolor="black",
         linewidth=0.8,

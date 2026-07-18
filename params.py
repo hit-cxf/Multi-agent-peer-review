@@ -10,6 +10,7 @@ import argparse
 import os
 from datetime import datetime
 import sample_filter
+from llm_adapter import default_model
 
 TASK_FILE = {
     'GSM8K': 'GSM8K.jsonl',         # 1319      https://github.com/openai/grade-school-math/blob/master/grade_school_math/data/test.jsonl
@@ -44,7 +45,7 @@ def add_llm_args(args_parser):
     args_parser.add_argument('--base_url', type=str,
                              default=os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1'))
     args_parser.add_argument('--model', type=str,
-                             default=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo-0613'))
+                             default=default_model())
     args_parser.add_argument('--enable_thinking', choices=['true', 'false'],
                              default=os.getenv('OPENAI_ENABLE_THINKING'))
     args_parser.add_argument('--openai_organization', type=str,
@@ -268,9 +269,11 @@ def eval_args():
                              choices=['single_agent', 'self_correction', 'majority', 'debate', 'feedback',
                                       'peer_review', 'ablation_solution'])
     args_parser.add_argument('--time_flag', type=str, default='1113')
+    sample_filter.add_sample_filter_args(args_parser)
 
     # parse
     args = args_parser.parse_args()
+    args = sample_filter.finalize_sample_filter_args(args, TASK_FILE)
     args.example_num = EXAMPLE_NUM[args.task]
     if args.method in ['majority', 'single_agent']:
         args.eval_file = os.path.join(os.path.join(args.eval_dir, args.task),

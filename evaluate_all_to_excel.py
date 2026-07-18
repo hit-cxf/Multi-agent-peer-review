@@ -6,6 +6,8 @@ import json
 import re
 import subprocess
 import sys
+import math
+import statistics
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -67,7 +69,18 @@ def parse_args():
     )
     parser.add_argument(
         "--time-flag",
-        help="Result filename suffix such as 0713. Auto-detected when omitted.",
+        help="Backward-compatible single result suffix; overrides --time-flags.",
+    )
+    parser.add_argument(
+        "--time-flags",
+        default="0713,0716,0718",
+        help="Comma-separated independent run suffixes (default: 0713,0716,0718).",
+    )
+    parser.add_argument(
+        "--interval",
+        choices=["std", "ci95"],
+        default="std",
+        help="Radius after ±: sample standard deviation (std) or 95%% CI half-width.",
     )
     parser.add_argument(
         "--output",
@@ -193,6 +206,8 @@ def run_evaluations(result_dir, time_flag, log_dir, task_exclusions):
                 "--time_flag",
                 time_flag,
             ]
+            for dataset, index in sorted(task_exclusions.get(task, set())):
+                command.extend(["--exclude-sample", f"{dataset}:{index}"])
             completed = subprocess.run(
                 command,
                 cwd=PROJECT_DIR,
@@ -222,6 +237,7 @@ def run_evaluations(result_dir, time_flag, log_dir, task_exclusions):
             results.append(
                 {
                     "task": task,
+                    "time_flag": time_flag,
                     "method": method,
                     "label": label,
                     "sample_size": effective_size,
@@ -238,6 +254,7 @@ def run_evaluations(result_dir, time_flag, log_dir, task_exclusions):
                     agent_results.append(
                         {
                             "task": task,
+                            "time_flag": time_flag,
                             "method": method,
                             "label": label,
                             "sample_size": effective_size,
@@ -245,6 +262,31 @@ def run_evaluations(result_dir, time_flag, log_dir, task_exclusions):
                         }
                     )
     return results, agent_results
+
+
+def aggregate_results(results, interval):
+    grouped = {}
+    for row in results:
+        grouped.setdefault((row["method"], row["task"]), []).append(row)
+    aggregated = []
+    for (method, task), rows in grouped.items():
+        accuracies = [row["accuracy"] for row in rows]
+        mean = statistics.mean(accuracies)
+        std = statistics.stdev(accuracies) if len(accuracies) > 1 else 0.0
+        radius = std if interval == "std" else 4.3026527299 * std / math.sqrt(len(rows))
+        aggregated.append(
+            {
+                "task": task,
+                "method": method,
+                "label": rows[0]["label"],
+                "sample_size": rows[0]["sample_size"],
+                "runs": len(rows),
+                "mean_accuracy": mean,
+                "radius": radius,
+                "run_accuracies": accuracies,
+            }
+        )
+    return aggregated
 
 
 def style_table(ws, header_row, min_col, max_col, max_row):
@@ -280,16 +322,20 @@ def autosize(ws, caps=None):
         ws.column_dimensions[letter].width = min(max(width + 2, 10), caps.get(letter, 45))
 
 
-def build_workbook(results, agent_results, result_dir, time_flag, output_path):
+def build_workbook(results, aggregated, agent_results, result_dir, time_flags, interval, output_path):
     wb = Workbook()
     summary = wb.active
     summary.title = "Paper Table"
     summary.sheet_view.showGridLines = False
     tasks = list(TASK_SIZES)
-    lookup = {(row["method"], row["task"]): row for row in results}
+    lookup = {(row["method"], row["task"]): row for row in aggregated}
     summary.append(["", "GSM8K", "SVAMP", "AQuA", "MultiArith", "AddSub", "SingleEq", "ARC-c", "StrategyQA", "Colored Objects", "Penguins"])
     for label, method in PAPER_ROWS:
-        values = [lookup[(method, task)]["accuracy"] * 100 for task in tasks]
+        values = [
+            f'{lookup[(method, task)]["mean_accuracy"] * 100:.2f} ± '
+            f'{lookup[(method, task)]["radius"] * 100:.2f}'
+            for task in tasks
+        ]
         summary.append([label, *values])
     summary.freeze_panes = "B2"
     summary.column_dimensions["A"].width = 28
@@ -298,7 +344,6 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
     summary.column_dimensions["J"].width = 17
     for row in summary.iter_rows(min_row=2, max_row=summary.max_row, min_col=2, max_col=11):
         for cell in row:
-            cell.number_format = "0.00"
             cell.alignment = Alignment(horizontal="center")
     for row in summary.iter_rows(min_row=1, max_row=summary.max_row, min_col=1, max_col=11):
         for cell in row:
@@ -316,6 +361,7 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
     detail.sheet_view.showGridLines = False
     headers = [
         "Dataset",
+        "Run",
         "Method",
         "Method Label",
         "Samples",
@@ -330,6 +376,7 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
         detail.append(
             [
                 row["task"],
+                row["time_flag"],
                 row["method"],
                 row["label"],
                 row["sample_size"],
@@ -343,19 +390,33 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
     style_table(detail, 1, 1, len(headers), detail.max_row)
     detail.freeze_panes = "A2"
     detail.auto_filter.ref = detail.dimensions
-    for row in detail.iter_rows(min_row=2, min_col=5, max_col=6):
+    for row in detail.iter_rows(min_row=2, min_col=6, max_col=7):
         for cell in row:
             cell.number_format = "0.00%"
-    autosize(detail, {"C": 28, "G": 60, "H": 55, "I": 80})
+    autosize(detail, {"D": 28, "H": 60, "I": 55, "J": 80})
+
+    aggregate = wb.create_sheet("Aggregate Results")
+    aggregate_headers = ["Dataset", "Method", "Method Label", "Samples", "Runs", "Mean Accuracy", "Radius", "Interval"]
+    aggregate.append(aggregate_headers)
+    for row in aggregated:
+        aggregate.append([row["task"], row["method"], row["label"], row["sample_size"], row["runs"], row["mean_accuracy"], row["radius"], interval])
+    style_table(aggregate, 1, 1, len(aggregate_headers), aggregate.max_row)
+    for row in aggregate.iter_rows(min_row=2, min_col=6, max_col=7):
+        for cell in row:
+            cell.number_format = "0.00%"
+    aggregate.freeze_panes = "A2"
+    aggregate.auto_filter.ref = aggregate.dimensions
+    autosize(aggregate, {"C": 28})
 
     agents = wb.create_sheet("Agent Details")
     agents.sheet_view.showGridLines = False
-    agent_headers = ["Dataset", "Method", "Method Label", "Samples", "Agent", "Accuracy", "SEM"]
+    agent_headers = ["Dataset", "Run", "Method", "Method Label", "Samples", "Agent", "Accuracy", "SEM"]
     agents.append(agent_headers)
     for row in agent_results:
         agents.append(
             [
                 row["task"],
+                row["time_flag"],
                 row["method"],
                 row["label"],
                 row["sample_size"],
@@ -367,7 +428,7 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
     style_table(agents, 1, 1, len(agent_headers), agents.max_row)
     agents.freeze_panes = "A2"
     agents.auto_filter.ref = agents.dimensions
-    for row in agents.iter_rows(min_row=2, min_col=6, max_col=7):
+    for row in agents.iter_rows(min_row=2, min_col=7, max_col=8):
         for cell in row:
             cell.number_format = "0.00%"
     autosize(agents, {"C": 28})
@@ -378,14 +439,15 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
     readme_rows = [
         ("Generated", datetime.now().astimezone().isoformat(timespec="seconds")),
         ("Result directory", str(result_dir)),
-        ("Time flag", time_flag),
+        ("Time flags", ", ".join(time_flags)),
+        ("Aggregation", f"Mean across {len(time_flags)} independent runs; ± radius uses {interval}."),
         ("Evaluator", str(PROJECT_DIR / "eval.py")),
         ("Evaluation count", len(results)),
         ("Source JSON count", len({row["source_file"] for row in results})),
         ("Majority", "Reuses each dataset's single_agent JSON; no separate generation file."),
         ("Accuracy", "Fraction of correctly evaluated examples."),
         ("SEM", "Population standard deviation divided by sqrt(number of examples), as implemented in eval.py."),
-        ("Paper Table", "Dataset header row plus method rows. Scores are 0-100 numeric values without percent formatting."),
+        ("Paper Table", "Dataset header row plus method rows. Each cell is mean ± radius on the 0-100 scale, without a percent sign."),
         ("Ours (w/o solution)", "Revision receives peer feedback but Stage-2 peer-solution dialogue is removed."),
     ]
     for item in readme_rows:
@@ -403,7 +465,7 @@ def build_workbook(results, agent_results, result_dir, time_flag, output_path):
 
 def verify_workbook(output_path, expected_results):
     wb = load_workbook(output_path, data_only=False, read_only=True)
-    required = {"Paper Table", "Evaluation Results", "Agent Details", "README"}
+    required = {"Paper Table", "Evaluation Results", "Aggregate Results", "Agent Details", "README"}
     if set(wb.sheetnames) != required:
         raise RuntimeError(f"Unexpected workbook sheets: {wb.sheetnames}")
     if wb["Evaluation Results"].max_row != expected_results + 1:
@@ -417,31 +479,47 @@ def verify_workbook(output_path, expected_results):
         raise RuntimeError("Paper table dataset header order verification failed")
     if paper["A2"].value != "Zero-shot CoT" or paper["A8"].value != "Ours (w/o solution)":
         raise RuntimeError("Paper table method labels verification failed")
-    if paper["B2"].value is None or paper["B2"].value <= 1:
-        raise RuntimeError("Paper table scores were not converted to the 0-100 scale")
-    if paper["B8"].value is None or paper["B8"].value <= 1:
-        raise RuntimeError("Ours (w/o solution) score is missing or not on the 0-100 scale")
+    if " ± " not in str(paper["B2"].value) or " ± " not in str(paper["B8"].value):
+        raise RuntimeError("Paper table cells are not formatted as mean ± radius")
     wb.close()
 
 
 def main():
     args = parse_args()
     result_dir = args.result_dir.resolve()
-    time_flag = args.time_flag or detect_time_flag(result_dir)
+    time_flags = [args.time_flag] if args.time_flag else [
+        value.strip() for value in args.time_flags.split(",") if value.strip()
+    ]
+    if not time_flags:
+        raise RuntimeError("No time flags selected")
+    if len(set(time_flags)) != len(time_flags):
+        raise RuntimeError(f"Duplicate time flags: {time_flags}")
+    flag_label = "-".join(time_flags)
     output_path = (
         args.output.resolve()
         if args.output
-        else result_dir / f"evaluation_{result_dir.name}_{time_flag}.xlsx"
+        else result_dir / f"evaluation_{result_dir.name}_{flag_label}.xlsx"
     )
     log_dir = (
-        args.log_dir.resolve() if args.log_dir else result_dir / "eval_logs" / time_flag
+        args.log_dir.resolve() if args.log_dir else result_dir / "eval_logs" / flag_label
     )
 
-    task_exclusions = validate_inputs(result_dir, time_flag)
-    results, agent_results = run_evaluations(
-        result_dir, time_flag, log_dir, task_exclusions
-    )
-    build_workbook(results, agent_results, result_dir, time_flag, output_path)
+    exclusions_by_flag = {
+        flag: validate_inputs(result_dir, flag) for flag in time_flags
+    }
+    shared_exclusions = {
+        task: set().union(*(exclusions_by_flag[flag].get(task, set()) for flag in time_flags))
+        for task in TASK_SIZES
+    }
+    results, agent_results = [], []
+    for flag in time_flags:
+        run_results, run_agents = run_evaluations(
+            result_dir, flag, log_dir, shared_exclusions
+        )
+        results.extend(run_results)
+        agent_results.extend(run_agents)
+    aggregated = aggregate_results(results, args.interval)
+    build_workbook(results, aggregated, agent_results, result_dir, time_flags, args.interval, output_path)
     verify_workbook(output_path, len(results))
     print(f"Excel report: {output_path}")
 

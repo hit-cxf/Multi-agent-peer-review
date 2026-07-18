@@ -1,0 +1,29 @@
+# test
+curl -sS "$OPENAI_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3-8b",
+    "messages": [{"role": "user", "content": "Reply with OK"}],
+    "enable_thinking": false
+  }'
+
+# run
+./run_all_experiments.sh
+
+./run_all_experiments.sh \
+  --methods ablation_solution \
+  --time-flag 0713
+
+# figure 5
+python supplementary/evaluate_feedback_correctness_llm.py \
+  --result-dir result_qwen3_8b \
+  --output-dir result_figure5_llm_judge \
+  --time-flag 0713 \
+  --sample-size 600 \
+  --seed 42 \
+  --workers 20 \
+  --max-retries 8
+
+# eval
+python eval.py --task Colored_Objects --method peer_review --time_flag 0713 --eval_dir result_qwen3_8b

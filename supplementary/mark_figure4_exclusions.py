@@ -25,6 +25,7 @@ def parse_args():
     )
     parser.add_argument("--task", default="StrategyQA")
     parser.add_argument("--index", type=int, default=385, help="1-based dataset index")
+    parser.add_argument("--time-flag", help="Only modify files with this timestamp suffix")
     parser.add_argument("--reason", default="DashScope data_inspection_failed")
     return parser.parse_args()
 
@@ -45,7 +46,11 @@ def main():
     if args.index < 1:
         raise ValueError("--index must be positive")
 
-    paths = sorted(args.result_root.glob(f"agent_num_*_review_rounds_*/{args.task}/*.json"))
+    pattern = f"{args.task}_*_{args.time_flag}.json" if args.time_flag else "*.json"
+    paths = sorted(
+        path for path in args.result_root.rglob(pattern)
+        if path.parent.name == args.task
+    )
     if not paths:
         raise FileNotFoundError(f"No {args.task} result files found under {args.result_root}")
 
@@ -63,7 +68,7 @@ def main():
         atomic_write(path, data)
         changed += 1
         print(f"MARKED: {path}")
-    print(f"Marked {changed} supplementary result file(s); main-table results were not scanned.")
+    print(f"Marked {changed} result file(s) under {args.result_root}.")
 
 
 if __name__ == "__main__":

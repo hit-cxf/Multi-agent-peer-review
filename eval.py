@@ -192,7 +192,9 @@ def evaluate_multi_agent(args):
 
     input_data = read_json(args.eval_file)
     assert len(input_data) == args.example_num
-    input_data, excluded_data = sample_filter.filter_evaluation_rows(input_data)
+    input_data, excluded_data = sample_filter.filter_evaluation_rows(
+        input_data, args.sample_exclusions, args.task
+    )
     effective_num = len(input_data)
     logging.info('evaluation samples: %d; excluded: %d', effective_num, len(excluded_data))
 
@@ -222,7 +224,9 @@ def evaluate_multi_agent(args):
 def evaluate_single_agent(args):
     input_data = read_json(args.eval_file)
     assert len(input_data) == args.example_num
-    input_data, excluded_data = sample_filter.filter_evaluation_rows(input_data)
+    input_data, excluded_data = sample_filter.filter_evaluation_rows(
+        input_data, args.sample_exclusions, args.task
+    )
     effective_num = len(input_data)
     logging.info('evaluation samples: %d; excluded: %d', effective_num, len(excluded_data))
     if not input_data:

@@ -88,9 +88,15 @@ def append_excluded_record_if_needed(
     return True
 
 
-def filter_evaluation_rows(rows):
-    included = [row for row in rows if not row.get("excluded", False)]
-    excluded = [row for row in rows if row.get("excluded", False)]
+def filter_evaluation_rows(rows, exclusions=None, dataset=None):
+    """Filter stored placeholders and optional dataset/index exclusions."""
+    exclusions = exclusions or set()
+    included, excluded = [], []
+    for one_based_index, row in enumerate(rows, start=1):
+        should_exclude = row.get("excluded", False) or (
+            dataset is not None and (dataset, one_based_index) in exclusions
+        )
+        (excluded if should_exclude else included).append(row)
     return included, excluded
 
 
