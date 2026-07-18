@@ -25,3 +25,6 @@ confidence is orange, and the ideal calibration reference is gray.
 - `plot_answer_transitions.py`: answer-change analysis.
 - `plot_confidence_calibration.py`: Figure 5 confidence distribution,
   accuracy-confidence gap, reliability diagrams, ACC, AUROC, and ECE.
+- `plot_confidence_curse.py`: focused Figure 5 reproduction for GSM8K and
+  StrategyQA; each dataset's stacked feedback distribution and reliability
+  diagram are exported as separate figures.

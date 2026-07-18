@@ -22,9 +22,9 @@ from eval import compute_accuracy  # noqa: E402
 TASKS = ("GSM8K", "AQuA", "StrategyQA")
 TASK_SIZES = {"GSM8K": 500, "AQuA": 254, "StrategyQA": 500}
 TASK_STYLE = {
-    "GSM8K": {"color": "#2563EB", "marker": "o"},
-    "AQuA": {"color": "#E88C30", "marker": "s"},
-    "StrategyQA": {"color": "#2A9D6F", "marker": "^"},
+    "GSM8K": {"color": "blue", "marker": "o"},
+    "AQuA": {"color": "green", "marker": "o"},
+    "StrategyQA": {"color": "red", "marker": "o"},
 }
 CONFIG_RE = re.compile(r"agent_num_(\d+)_review_rounds_(\d+)$")
 
@@ -113,24 +113,31 @@ def required_keys():
     return keys
 
 
-def shared_y_limits(values):
-    scores = list(values.values())
-    low = math.floor((min(scores) - 2) / 5) * 5
-    high = math.ceil((max(scores) + 2) / 5) * 5
-    return max(0, low), min(100, high)
+def curve_y_limits(scores):
+    low = max(0, math.floor(min(scores)) - 1)
+    high = min(100, math.ceil(max(scores)) + 1)
+    return low, high
 
 
-def draw_curve(values, varying, output, y_limits, show_value_labels):
+def draw_curve(values, varying, output, show_value_labels):
     if varying == "agent_num":
         x_values = (2, 3, 4, 5)
-        xlabel = "Number of agents"
+        xlabel = "Agent Number"
         lookup = lambda x, task: (x, 1, task)
     else:
         x_values = (1, 2, 3, 4)
-        xlabel = "Number of review rounds"
+        xlabel = "Review Round"
         lookup = lambda x, task: (3, x, task)
 
-    fig, ax = plt.subplots(figsize=(6.2, 4.1))
+    plotted_scores = [
+        values[lookup(x, task)]
+        for task in TASKS
+        for x in x_values
+        if lookup(x, task) in values
+    ]
+    y_limits = curve_y_limits(plotted_scores)
+
+    fig, ax = plt.subplots(figsize=(10, 6.3))
     for task in TASKS:
         points = [(x, values[lookup(x, task)]) for x in x_values if lookup(x, task) in values]
         if not points:
@@ -143,31 +150,53 @@ def draw_curve(values, varying, output, y_limits, show_value_labels):
             label=task,
             color=style["color"],
             marker=style["marker"],
-            linewidth=1.8,
-            markersize=6,
+            linewidth=2.0,
+            markersize=7,
         )
         if show_value_labels:
             for x, y in points:
                 ax.annotate(
-                    f"{y:.1f}",
+                    f"{y:.2f}%",
                     (x, y),
-                    xytext=(0, 7),
+                    xytext=(0, 9),
                     textcoords="offset points",
                     ha="center",
                     va="bottom",
-                    fontsize=8.5,
+                    fontsize=13,
                     color=style["color"],
                 )
 
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Accuracy (%)")
+    ax.set_xlabel(xlabel, fontsize=17)
+    ax.set_ylabel("Accuracy (%)", fontsize=17)
     ax.set_xticks(x_values)
     ax.set_xlim(min(x_values) - 0.15, max(x_values) + 0.15)
     ax.set_ylim(*y_limits)
-    ax.grid(axis="y", color="#E2E8F0", linewidth=0.8)
+    first_even_tick = math.ceil(y_limits[0] / 2) * 2
+    ax.set_yticks(range(first_even_tick, math.floor(y_limits[1]) + 1, 2))
+    ax.grid(
+        True,
+        axis="both",
+        color="#b0b0b0",
+        linestyle="--",
+        linewidth=0.8,
+        alpha=0.65,
+    )
     ax.set_axisbelow(True)
+    ax.tick_params(axis="both", labelsize=15, direction="in", length=5, width=1.1)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(0.5, 1.01))
+    ax.spines["left"].set_linewidth(1.2)
+    ax.spines["bottom"].set_linewidth(1.2)
+    ax.spines["left"].set_color("#222222")
+    ax.spines["bottom"].set_color("#222222")
+    ax.legend(
+        loc="best",
+        fontsize=15,
+        frameon=True,
+        framealpha=0.8,
+        edgecolor="#cccccc",
+        handlelength=2.2,
+    )
+    fig.tight_layout()
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=300, bbox_inches="tight", facecolor="white")
@@ -220,20 +249,17 @@ def main():
             f"{formatted}\nUse --allow-missing only for a partial preview."
         )
 
-    y_limits = shared_y_limits(values)
     print_plot_data(values, files)
     draw_curve(
         values,
         "agent_num",
         args.output_dir / "figure4_agent_num.png",
-        y_limits,
         not args.no_value_labels,
     )
     draw_curve(
         values,
         "review_rounds",
         args.output_dir / "figure4_review_rounds.png",
-        y_limits,
         not args.no_value_labels,
     )
 

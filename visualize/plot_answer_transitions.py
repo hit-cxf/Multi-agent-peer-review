@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot initial-to-final answer transitions from existing MAPR results."""
+"""Draw answer-change pie charts from existing MAPR result files."""
 
 import argparse
 import json
@@ -20,41 +20,41 @@ if str(PROJECT_DIR) not in sys.path:
 
 from eval import compute_accuracy, parse_pred_answer
 from params import EXAMPLE_NUM
-from style import ANSWER_TRANSITION_COLORS, COLORS
 
 
-METHODS = [
-    ("self_correction", "Self-correct"),
-    ("peer_review", "Ours"),
-    ("feedback", "Ours (w/o confidence)"),
-    ("ablation_solution", "Ours (w/o solution)"),
-]
-CATEGORIES = [
+METHODS = {
+    "self_correction": "Self-correct",
+    "peer_review": "Peer review",
+}
+DEFAULT_TASKS = ("GSM8K", "StrategyQA")
+CATEGORIES = (
     "No Change",
     "Correct → Incorrect",
-    "Incorrect → Correct",
     "Incorrect → Incorrect",
-]
+    "Incorrect → Correct",
+)
+# Match the supplied reference figure's Matplotlib categorical palette exactly.
+COLORS = ("#1f77b4", "#d62728", "#2ca02c", "#ff7f0e")
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--result-dir", type=Path, default=PROJECT_DIR / "result_qwen3_8b")
-    parser.add_argument("--task", default="GSM8K", choices=list(EXAMPLE_NUM))
+    parser.add_argument("--tasks", nargs="+", default=list(DEFAULT_TASKS))
+    parser.add_argument("--methods", nargs="+", choices=list(METHODS), default=list(METHODS))
     parser.add_argument("--time-flag", default="0713")
-    parser.add_argument("--output", type=Path)
+    parser.add_argument("--output-dir", type=Path, default=PROJECT_DIR / "pics")
     return parser.parse_args()
 
 
 def answers_equal(left, right, task):
-    """Compare parsed answers semantically instead of comparing raw text."""
     if left is None or right is None:
         return left is right
     if task in {"GSM8K", "SVAMP", "MultiArith", "AddSub", "SingleEq"}:
         try:
             return float(left) == float(right)
         except (TypeError, ValueError):
-            return str(left).strip() == str(right).strip()
+            pass
     return str(left).strip().upper() == str(right).strip().upper()
 
 
@@ -62,9 +62,17 @@ def transition_counts(path, task):
     data = json.loads(path.read_text(encoding="utf-8"))
     eval_args = SimpleNamespace(task=task)
     counts = Counter()
+    excluded = 0
 
     for row in data:
-        for context in row["agent_contexts"]:
+        contexts = row.get("agent_contexts")
+        if not contexts:
+            excluded += 1
+            continue
+        for context in contexts:
+            if len(context) < 2:
+                excluded += 1
+                continue
             initial_text = context[1]["content"]
             final_text = context[-1]["content"]
             initial = parse_pred_answer(initial_text, eval_args)
@@ -81,109 +89,97 @@ def transition_counts(path, task):
             elif not initial_correct and not final_correct:
                 category = "Incorrect → Incorrect"
             else:
-                # Both predictions are correct but differ only in representation.
                 category = "No Change"
             counts[category] += 1
-    return counts
+    return counts, excluded
 
 
-def add_labels(ax, values, lefts, y, total, minimum_width=0.7):
-    for value, left in zip(values, lefts):
-        width = value / total * 100 if total else 0
-        if width >= minimum_width:
-            ax.text(left + width / 2, y, f"{width:.1f}", ha="center", va="center", fontsize=9)
+def plot_pie(counts, output):
+    values = [counts[category] for category in CATEGORIES]
+    fig, ax = plt.subplots(figsize=(6.4, 5.0))
+    wedges, _ = ax.pie(
+        values,
+        colors=COLORS,
+        startangle=22.7,
+        counterclock=False,
+        wedgeprops={"linewidth": 0},
+    )
 
+    total = sum(values)
+    label_points = []
+    small_percent_points = []
+    for category, value, wedge in zip(CATEGORIES, values, wedges):
+        if value == 0:
+            continue
+        share = value / total * 100 if total else 0
+        angle = np.deg2rad((wedge.theta1 + wedge.theta2) / 2)
 
-def plot(rows, output, task):
-    labels = [label for _, label, _ in rows]
-    y = np.arange(len(rows))
-    fig, (ax_all, ax_changed) = plt.subplots(1, 2, figsize=(12.6, 4.8))
-    fig.subplots_adjust(left=0.19, right=0.96, top=0.94, bottom=0.25, wspace=0.06)
+        # Keep the supplied layout while preventing tiny adjacent slices from
+        # placing their percentages on top of one another.
+        if share < 4:
+            radius = 0.64
+            small_percent_points.append(
+                [f"{share:.1f}%", radius * np.cos(angle), radius * np.sin(angle)]
+            )
+        else:
+            radius = 0.62
+            ax.text(
+                radius * np.cos(angle), radius * np.sin(angle), f"{share:.1f}%",
+                ha="center", va="center", fontsize=10,
+            )
 
-    left = np.zeros(len(rows))
-    for category in CATEGORIES:
-        values = np.array([counts[category] / sum(counts.values()) * 100 for _, _, counts in rows])
-        ax_all.barh(y, values, left=left, color=ANSWER_TRANSITION_COLORS[category], height=0.55, label=category)
-        for row_index, value in enumerate(values):
-            # Small transition segments are expanded and labelled precisely in
-            # the right panel; labelling them here would create collisions.
-            if value >= 4:
-                ax_all.text(left[row_index] + value / 2, row_index, f"{value:.1f}", ha="center", va="center", fontsize=9)
-        left += values
+        label_points.append([category, 1.08 * np.cos(angle), 1.08 * np.sin(angle)])
 
-    changed_categories = CATEGORIES[1:]
-    left = np.zeros(len(rows))
-    for category in changed_categories:
-        values = []
-        for _, _, counts in rows:
-            changed = sum(counts[item] for item in changed_categories)
-            values.append(counts[category] / changed * 100 if changed else 0)
-        values = np.array(values)
-        ax_changed.barh(y, values, left=left, color=ANSWER_TRANSITION_COLORS[category], height=0.55)
-        for row_index, value in enumerate(values):
-            if value >= 5:
-                ax_changed.text(left[row_index] + value / 2, row_index, f"{value:.1f}", ha="center", va="center", fontsize=9)
-        left += values
+    small_percent_points.sort(key=lambda point: point[2])
+    for index in range(1, len(small_percent_points)):
+        small_percent_points[index][2] = max(
+            small_percent_points[index][2], small_percent_points[index - 1][2] + 0.085
+        )
+    for value, x, y in small_percent_points:
+        ax.text(x, y, value, ha="center", va="center", fontsize=10)
 
-    for ax in (ax_all, ax_changed):
-        ax.set_xlim(0, 100)
-        ax.set_xticks(np.arange(0, 101, 20))
-        ax.set_xlabel("Share of answers (%)")
-        ax.grid(axis="x", color=COLORS["structure"], linewidth=0.7)
-        ax.set_axisbelow(True)
-        ax.spines[["top", "right", "left"]].set_visible(False)
-        ax.tick_params(axis="y", length=0)
-        ax.invert_yaxis()
+    # Resolve collisions among exterior labels independently on each side.
+    for side in (-1, 1):
+        points = [point for point in label_points if np.sign(point[1]) == side]
+        points.sort(key=lambda point: point[2])
+        for index in range(1, len(points)):
+            points[index][2] = max(points[index][2], points[index - 1][2] + 0.105)
+        for category, x, y in points:
+            ax.text(x, y, category, ha="left" if side > 0 else "right", va="center", fontsize=10)
 
-    ax_all.set_yticks(y, labels)
-    ax_changed.set_yticks(y, [""] * len(labels))
-    changed_totals = [sum(c[item] for item in changed_categories) for _, _, c in rows]
-    for index, changed in enumerate(changed_totals):
-        ax_changed.text(101.5, index, f"n={changed}", va="center", fontsize=9, color=COLORS["secondary_text"], clip_on=False)
-
-    handles, legend_labels = ax_all.get_legend_handles_labels()
-    fig.legend(handles, legend_labels, loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.04))
-
+    ax.axis("equal")
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=300, bbox_inches="tight", facecolor="white")
     fig.savefig(output.with_suffix(".pdf"), bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
-def print_plot_data(rows, task):
-    print(f"\n[PLOT DATA] Answer transitions: task={task}")
-    print(
-        "method\ttotal\tcategory\tcount\tshare_all_pct\tshare_changed_pct"
-    )
-    changed_categories = CATEGORIES[1:]
-    for _, label, counts in rows:
-        total = sum(counts.values())
-        changed = sum(counts[category] for category in changed_categories)
-        for category in CATEGORIES:
-            count = counts[category]
-            share_all = count / total * 100 if total else 0
-            share_changed = (
-                count / changed * 100 if changed and category in changed_categories else 0
-            )
-            print(
-                f"{label}\t{total}\t{category}\t{count}\t"
-                f"{share_all:.4f}\t{share_changed:.4f}"
-            )
+def print_plot_data(task, method, counts, excluded):
+    total = sum(counts.values())
+    print(f"\n[PLOT DATA] task={task}\tmethod={METHODS[method]}\ttotal={total}\texcluded={excluded}")
+    print("category\tcount\tshare_pct")
+    for category in CATEGORIES:
+        count = counts[category]
+        share = count / total * 100 if total else 0
+        print(f"{category}\t{count}\t{share:.4f}")
 
 
 def main():
     args = parse_args()
-    output = args.output or PROJECT_DIR / "pics" / f"answer_transitions_{args.task}_{args.time_flag}.png"
-    rows = []
-    for method, label in METHODS:
-        path = args.result_dir / args.task / f"{args.task}_{method}_{EXAMPLE_NUM[args.task]}_{args.time_flag}.json"
-        if not path.exists():
-            raise FileNotFoundError(path)
-        rows.append((method, label, transition_counts(path, args.task)))
-    print_plot_data(rows, args.task)
-    plot(rows, output, args.task)
-    print(f"\n[OUTPUT] {output}")
-    print(f"[OUTPUT] {output.with_suffix('.pdf')}")
+    for task in args.tasks:
+        if task not in EXAMPLE_NUM:
+            raise ValueError(f"Unknown task: {task}")
+        for method in args.methods:
+            source = (
+                args.result_dir / task
+                / f"{task}_{method}_{EXAMPLE_NUM[task]}_{args.time_flag}.json"
+            )
+            if not source.exists():
+                raise FileNotFoundError(source)
+            counts, excluded = transition_counts(source, task)
+            print_plot_data(task, method, counts, excluded)
+            output = args.output_dir / f"answer_change_{task}_{method}.png"
+            plot_pie(counts, output)
 
 
 if __name__ == "__main__":
